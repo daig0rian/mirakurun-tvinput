@@ -23,12 +23,19 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - run: ./gradlew assembleDebug
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease
 
       - name: Rename APK
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          mv app/build/outputs/apk/debug/app-debug.apk "mirakurun-tvinput-${TAG}.apk"
+          mv app/build/outputs/apk/release/app-release.apk "mirakurun-tvinput-${TAG}.apk"
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
