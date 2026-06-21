@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#1a1a1a"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="64dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="Mirakurun TV Input"
+        android:textColor="#ffffff"
+        android:textSize="28sp" />
+
+    <TextView
+        android:id="@+id/text_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:text="確認中..."
+        android:textColor="#cccccc"
+        android:textSize="20sp" />
+
+    <Button
+        android:id="@+id/button_watch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:text="TVアプリを起動する"
+        android:visibility="gone" />
+
+    <Button
+        android:id="@+id/button_setup"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="チャンネル設定を起動する" />
+
+</LinearLayout>

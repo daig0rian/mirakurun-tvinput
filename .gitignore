@@ -1,0 +1,27 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Local properties
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# NDK build cache
+app/.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CLAUDE.md is project-internal
+CLAUDE.md
+
+# Claude Code settings
+.claude/
+
+# Debug logs
+logcat*.txt
