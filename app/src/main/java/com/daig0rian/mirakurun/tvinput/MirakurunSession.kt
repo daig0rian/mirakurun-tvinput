@@ -50,7 +50,7 @@ class MirakurunSession(
     private val audioGroups = mutableListOf<Tracks.Group>()
 
     // ARIB字幕
-    private val overlayView = SubtitleOverlayView(context).also { it.visibility = View.INVISIBLE }
+    private val overlayView = SubtitleOverlayView(context).also { it.visibility = View.VISIBLE }
     private var captionHandle: Long = 0
     private var captionEnabled = true
 

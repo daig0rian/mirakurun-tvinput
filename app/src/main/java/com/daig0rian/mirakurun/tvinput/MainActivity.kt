@@ -15,14 +15,31 @@ private const val ACTION_SETUP_INPUTS = "android.media.tv.action.SETUP_INPUTS"
 
 class MainActivity : Activity() {
 
+    private lateinit var statusText: TextView
+    private lateinit var watchButton: Button
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val statusText = findViewById<TextView>(R.id.text_status)
-        val watchButton = findViewById<Button>(R.id.button_watch)
+        statusText = findViewById(R.id.text_status)
+        watchButton = findViewById(R.id.button_watch)
         val setupButton = findViewById<Button>(R.id.button_setup)
 
+        setupButton.setOnClickListener {
+            val setupIntent = Intent(ACTION_SETUP_INPUTS)
+            if (setupIntent.resolveActivity(packageManager) != null) {
+                startActivity(setupIntent)
+            } else {
+                Toast.makeText(this, "Mirakurun TV Input を利用するには TV アプリが必要です", Toast.LENGTH_LONG).show()
+                val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.tv"))
+                startActivity(storeIntent)
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
         val channelCount = queryChannelCount()
         statusText.text = if (channelCount > 0) {
             "${channelCount} チャンネル登録済み"
@@ -34,17 +51,8 @@ class MainActivity : Activity() {
         if (channelCount > 0 && tvIntent.resolveActivity(packageManager) != null) {
             watchButton.visibility = View.VISIBLE
             watchButton.setOnClickListener { startActivity(tvIntent) }
-        }
-
-        setupButton.setOnClickListener {
-            val setupIntent = Intent(ACTION_SETUP_INPUTS)
-            if (setupIntent.resolveActivity(packageManager) != null) {
-                startActivity(setupIntent)
-            } else {
-                Toast.makeText(this, "Mirakurun TV Input を利用するには TV アプリが必要です", Toast.LENGTH_LONG).show()
-                val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.tv"))
-                startActivity(storeIntent)
-            }
+        } else {
+            watchButton.visibility = View.GONE
         }
     }
 
