@@ -24,39 +24,35 @@ TV Input Framework（TIF）は、Android TV にテレビチューナー機能を
 
 ### TIF の全体像と本アプリの役割
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Android TV                        │
-│                                                     │
-│  ┌──────────────────────┐   ┌────────────────────┐  │
-│  │   TV アプリ (UI)      │   │  番組表・チャンネル  │  │
-│  │  ・番組表の表示        │   │   データベース       │  │
-│  │  ・チャンネル切り替え   │   │  (TvContract)      │  │
-│  │  ・字幕 ON/OFF        │   └────────┬───────────┘  │
-│  └──────────┬───────────┘            │              │
-│             │ onTune / onSetCaption  │ query/insert │
-│             ▼ Enabled / onSelectTrack▼              │
-│  ┌──────────────────────────────────────────────┐   │
-│  │        ★ Mirakurun TV Input ★                │   │
-│  │        （本アプリが提供する部分）               │   │
-│  │                                              │   │
-│  │  ┌─────────────┐  ┌────────────────────────┐ │   │
-│  │  │ チャンネル    │  │ セッション              │ │   │
-│  │  │ 登録・EPG同期 │  │  ・選局 (onTune)       │ │   │
-│  │  │              │  │  ・映像/音声再生        │ │   │
-│  │  │              │  │  ・字幕オーバーレイ      │ │   │
-│  │  │              │  │  ・音声トラック切替      │ │   │
-│  │  └──────┬───────┘  └──────────┬─────────────┘ │   │
-│  └─────────┼─────────────────────┼───────────────┘   │
-│            │                     │                   │
-└────────────┼─────────────────────┼───────────────────┘
-             │ /api/services       │ /api/services/{id}/stream
-             │ /api/programs       │ (生 MPEG-TS)
-             ▼                     ▼
-     ┌──────────────────────────────────┐
-     │         Mirakurun                │
-     │   (家庭内 LAN 上のサーバー)       │
-     └──────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Android TV
+        subgraph "TV アプリ (UI)"
+            UI_EPG["番組表の表示"]
+            UI_CH["チャンネル切り替え"]
+            UI_SUB["字幕 ON/OFF"]
+        end
+        subgraph "番組表・チャンネル DB"
+            TvContract["TvContract"]
+        end
+        subgraph "★ Mirakurun TV Input ★<br/>（本アプリが提供する部分）"
+            subgraph "チャンネル登録・EPG 同期"
+                SYNC["サービス取得・登録<br/>番組表同期"]
+            end
+            subgraph "セッション"
+                TUNE["選局 (onTune)"]
+                PLAY["映像/音声再生"]
+                SUBTITLE["字幕オーバーレイ"]
+                AUDIO["音声トラック切替"]
+            end
+        end
+    end
+    MIRAKURUN["Mirakurun<br/>（家庭内 LAN 上のサーバー）"]
+
+    UI_EPG & UI_CH & UI_SUB -- "onTune / onSetCaptionEnabled<br/>onSelectTrack" --> TUNE
+    TvContract -- "query / insert" --> SYNC
+    SYNC -- "/api/services<br/>/api/programs" --> MIRAKURUN
+    TUNE -- "/api/services/{id}/stream<br/>（生 MPEG-TS）" --> MIRAKURUN
 ```
 
 TV アプリ（Sony Bravia の「テレビ」アプリや Google TV の Live Channels など）は OEM やプラットフォームが提供するもので、本アプリが提供するのは **TV Input Service** の部分です。チャンネル登録・番組表同期・選局・映像再生・字幕表示・音声切り替えのすべてを担います。
@@ -65,7 +61,7 @@ TV アプリ（Sony Bravia の「テレビ」アプリや Google TV の Live Cha
 
 - **Android TV 端末** — Android 8.0（API 26）以上
 - **Mirakurun サーバー** — 同一 LAN 上で稼働していること（HTTP アクセス可能）
-- **ネットワーク** — 端末と Mirakurun が同一ネットワーク上にあること
+- **ネットワーク** — 端末と Mirakurun が同一ネットワーク上にあること、20Mbps程度のスループットがあること
 
 ## 検証済み端末
 
@@ -76,11 +72,8 @@ TV アプリ（Sony Bravia の「テレビ」アプリや Google TV の Live Cha
 
 ## インストール
 
-1. [Releases](../../releases) ページから最新の APK をダウンロード
-2. Android TV 端末に APK をインストール（ADB 経由またはファイルマネージャー）
-   ```
-   adb install mirakurun-tvinput.apk
-   ```
+- [Releases](../../releases) ページから最新の APK をダウンロードしてインストール
+- Downloader by AFTVnewsをストアからインストール後、[Releases](../../releases) にある Code を使うと簡単にダウンロードできます。
 
 ### ビルドする場合
 
@@ -90,7 +83,7 @@ Android Studio でプロジェクトを開いてビルドしてください。ND
 
 ### 1. Mirakurun URL の設定
 
-アプリを起動し、「チャンネル設定を起動する」ボタンを押します。Mirakurun の URL（例: `http://192.168.11.33:40772/`）を入力してください。
+アプリを起動し、「チャンネル設定を起動する」ボタンを押します。Mirakurun の URL（例: `http://192.168.1.10:40772/`）を入力してください。
 
 ### 2. チャンネルの取得・登録
 
@@ -110,27 +103,26 @@ URL を設定後、「チャンネルを取得する」ボタンを押すと、M
 
 ## 謝辞
 
-本プロジェクトは、日本のデジタルテレビ放送に関わるオープンソースソフトウェアの成果に支えられています。
+本プロジェクトはDTVに関する各オープンソースソフトウェアの功績を利用させていただいています。
 
-### [Mirakurun](https://github.com/Chinachu/Mirakurun)（kanreisa 氏）
+### [Mirakurun](https://github.com/Chinachu/Mirakurun)
 
-本プロジェクトの土台となるデジタル放送チューナーサーバーソフトウェア。物理チューナーの制御と MPEG-TS ストリームの配信を HTTP API として提供することで、ネットワーク越しのテレビ視聴を可能にしています。Mirakurun なしには本プロジェクトは存在しません。
+本プロジェクトの土台となるデジタル放送チューナーサーバーソフトウェア。物理チューナーの制御と MPEG-TS ストリームの配信を HTTP API として提供することで、ネットワーク越しのテレビ視聴を可能にしています。
 
-### [tsreadex](https://github.com/xtne6f/tsreadex)（xtne6f 氏）
-
-MPEG-TS ストリームの前処理ライブラリ。本アプリでは NDK/JNI 経由で統合し、以下を実現しています:
-
-- **PAT/PMT の正規化と PID 統一** — Mirakurun から届く生の MPEG-TS を ExoPlayer が安定して処理できる形に整形
-- **デュアルモノ音声の分離** — バイリンガル放送で使われる ADTS `channel_configuration=0`（PCE + 2×SCE）という特殊な符号化を検出し、主音声と副音声を個別の PID に分離。これにより ExoPlayer で音声トラックの切り替えが可能に
-
-### [libaribcaption](https://github.com/xqq/libaribcaption)（xqq 氏）
+### [libaribcaption](https://github.com/xqq/libaribcaption)
 
 ARIB STD-B24 字幕のデコード・レンダリングライブラリ。本アプリでは NDK/JNI 経由で統合し、以下を実現しています:
 
 - **ARIB 字幕のデコードとビットマップレンダリング** — 汎用の字幕エンジンでは対応できない日本の放送字幕規格を正確にデコードし、ビットマップ画像として描画。DRCS（外字）にも対応
 - **Android TV 上でのリアルタイム字幕表示** — レンダリングされたビットマップを TIF のオーバーレイビューで映像に重ねて表示し、プレイヤー UI の字幕 ON/OFF と連動
 
-これらのライブラリなしには、本プロジェクトの核心であるデュアルモノ音声と ARIB 字幕の実現は不可能でした。
+### [tsreadex](https://github.com/xtne6f/tsreadex)
+
+MPEG-TS ストリームの前処理ライブラリ。本アプリでは NDK/JNI 経由で統合し、以下を実現しています:
+
+- **PAT/PMT の正規化と PID 統一** — Mirakurun から届く生の MPEG-TS を ExoPlayer が安定して処理できる形に整形
+- **デュアルモノ音声の分離** — バイリンガル放送で使われる ADTS `channel_configuration=0`（PCE + 2×SCE）という特殊な符号化を検出し、主音声と副音声を個別の PID に分離。これにより ExoPlayer で音声トラックの切り替えが可能に
+
 
 ## ライセンス
 
