@@ -52,7 +52,7 @@ class MirakurunSession(
     // ARIB字幕
     private val overlayView = SubtitleOverlayView(context).also { it.visibility = View.INVISIBLE }
     private var captionHandle: Long = 0
-    private var captionEnabled = false
+    private var captionEnabled = true
 
     init {
         setOverlayViewEnabled(true)
@@ -84,10 +84,7 @@ class MirakurunSession(
     }
 
     override fun onSetCaptionEnabled(enabled: Boolean) {
-        Log.d(TAG, "onSetCaptionEnabled: $enabled")
-        captionEnabled = enabled
-        overlayView.visibility = if (enabled) View.VISIBLE else View.INVISIBLE
-        if (!enabled) overlayView.clearCaptions()
+        Log.d(TAG, "onSetCaptionEnabled: $enabled (ignored, use onSelectTrack)")
     }
 
     override fun onTune(channelUri: Uri): Boolean {
