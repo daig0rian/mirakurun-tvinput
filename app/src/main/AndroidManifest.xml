@@ -22,7 +22,7 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="content" android:authority="android.media.tv" />
+            <data android:scheme="content" android:mimeType="vnd.android.cursor.dir/channel" />
         </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
