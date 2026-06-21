@@ -4,10 +4,12 @@ import android.app.Activity
 import android.content.Intent
 import android.media.tv.TvContract
 import android.media.tv.TvInputManager
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 
 private const val ACTION_SETUP_INPUTS = "android.media.tv.action.SETUP_INPUTS"
 
@@ -35,7 +37,14 @@ class MainActivity : Activity() {
         }
 
         setupButton.setOnClickListener {
-            startActivity(Intent(ACTION_SETUP_INPUTS))
+            val setupIntent = Intent(ACTION_SETUP_INPUTS)
+            if (setupIntent.resolveActivity(packageManager) != null) {
+                startActivity(setupIntent)
+            } else {
+                Toast.makeText(this, "Mirakurun TV Input を利用するには TV アプリが必要です", Toast.LENGTH_LONG).show()
+                val storeIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.google.android.tv"))
+                startActivity(storeIntent)
+            }
         }
     }
 
