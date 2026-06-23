@@ -15,6 +15,11 @@ private const val BATCH_SIZE = TS_PACKET_SIZE * BATCH_PACKETS
 
 // PID assigned by tsreadex for normalized caption stream (servicefilter.cpp: 0x0130)
 private const val CAPTION_PID = 0x0130
+// Audio PIDs assigned by tsreadex (servicefilter.cpp: 0x0110=main, 0x0111=sub)
+private const val AUDIO_PID_MAIN = 0x0110
+private const val AUDIO_PID_SUB  = 0x0111
+// PTS increment for injection: 2 AAC frames (2 × 1024 samples / 48kHz × 90kHz = 3840 ticks ≈ 42.7ms)
+private const val AUDIO_PTS_INCREMENT = 3840L
 
 // Callback invoked on the caller's thread when a complete caption PES unit is assembled.
 // ptsMs: PTS in milliseconds (PTS_90kHz / 90). pesPayload: PES private-data payload
@@ -42,10 +47,10 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
     private var captionPesLen = 0
     private var captionPesPts = -1L  // ms, or -1 if unknown
 
-    // Diagnostics
-    private var pid0x0111Seen = false
-    private var lastPmtVersion = -1
-    private var totalBytesOut = 0L
+    // PTS tracking for audio PES injection
+    private var lastAudioPtsMain = -1L  // 90kHz ticks, -1 = unknown
+    private var lastAudioPtsSub  = -1L
+    private var ptsInjectionCount = 0
 
     companion object {
         private val EMPTY = ByteArray(0)
@@ -63,9 +68,9 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
         outputPos = 0
         captionPesLen = 0
         captionPesPts = -1L
-        pid0x0111Seen = false
-        lastPmtVersion = -1
-        totalBytesOut = 0L
+        lastAudioPtsMain = -1L
+        lastAudioPtsSub = -1L
+        ptsInjectionCount = 0
         return upstream.open(dataSpec)
     }
 
@@ -110,7 +115,7 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
 
             val processed = TsReadexFilter.processPackets(filterHandle, combined, fullPackets * TS_PACKET_SIZE)
             if (processed.isNotEmpty()) {
-                logDiagnostics(processed)
+                patchAudioPesPts(processed)
                 if (captionPesListener != null) extractCaptionPes(processed)
                 outputBytes = processed
                 outputPos = 0
@@ -120,6 +125,72 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
                 return toCopy
             }
             // processed is empty (all packets filtered) — loop again
+        }
+    }
+
+    // Scans audio PIDs for PES packets without PTS and injects an interpolated PTS.
+    // ExoPlayer's AdtsReader crashes (checkState at line 544) when PesReader calls
+    // packetStarted(C.TIME_UNSET) for a PES with PTS_DTS_flags=00. Some broadcasters
+    // legally omit PTS on continuation PES packets, so we patch them here.
+    private fun patchAudioPesPts(chunk: ByteArray) {
+        var i = 0
+        while (i + TS_PACKET_SIZE <= chunk.size) {
+            if (chunk[i] != 0x47.toByte()) { i += TS_PACKET_SIZE; continue }
+
+            val pid = ((chunk[i + 1].toInt() and 0x1F) shl 8) or (chunk[i + 2].toInt() and 0xFF)
+            if (pid != AUDIO_PID_MAIN && pid != AUDIO_PID_SUB) { i += TS_PACKET_SIZE; continue }
+
+            val pusi = (chunk[i + 1].toInt() and 0x40) != 0
+            if (!pusi) { i += TS_PACKET_SIZE; continue }
+
+            val afc = (chunk[i + 3].toInt() shr 4) and 0x03
+            if ((afc and 0x01) == 0) { i += TS_PACKET_SIZE; continue }
+            val afLen = if ((afc and 0x02) != 0) (chunk[i + 4].toInt() and 0xFF) + 1 else 0
+            val pStart = i + 4 + afLen
+            val avail = i + TS_PACKET_SIZE - pStart
+            if (avail < 14) { i += TS_PACKET_SIZE; continue }
+
+            if (chunk[pStart] != 0x00.toByte() ||
+                chunk[pStart + 1] != 0x00.toByte() ||
+                chunk[pStart + 2] != 0x01.toByte()) { i += TS_PACKET_SIZE; continue }
+
+            val flags2 = chunk[pStart + 7].toInt() and 0xFF
+            val ptsDtsFlags = (flags2 shr 6) and 0x03
+            val headerDataLen = chunk[pStart + 8].toInt() and 0xFF
+
+            if (ptsDtsFlags and 0x02 != 0) {
+                // PTS present — extract and save
+                val p = pStart + 9
+                val pts = ((chunk[p].toLong() and 0x0E) shl 29) or
+                          ((chunk[p + 1].toLong() and 0xFF) shl 22) or
+                          ((chunk[p + 2].toLong() and 0xFE) shl 14) or
+                          ((chunk[p + 3].toLong() and 0xFF) shl 7) or
+                          ((chunk[p + 4].toLong() and 0xFE) ushr 1)
+                if (pid == AUDIO_PID_MAIN) lastAudioPtsMain = pts else lastAudioPtsSub = pts
+            } else if (ptsDtsFlags == 0 && headerDataLen >= 5) {
+                // PTS missing, but enough room to inject into existing header padding
+                val lastPts = if (pid == AUDIO_PID_MAIN) lastAudioPtsMain else lastAudioPtsSub
+                if (lastPts >= 0) {
+                    val inject = lastPts + AUDIO_PTS_INCREMENT
+                    // Set PTS_DTS_flags = 10 (PTS only)
+                    chunk[pStart + 7] = (flags2 or 0x80).toByte()
+                    // Write 5-byte PTS at headerData start (replaces stuffing bytes)
+                    val p = pStart + 9
+                    chunk[p]     = (0x21 or ((inject ushr 29).toInt() and 0x0E)).toByte()
+                    chunk[p + 1] = ((inject ushr 22).toInt() and 0xFF).toByte()
+                    chunk[p + 2] = (0x01 or ((inject ushr 14).toInt() and 0xFE)).toByte()
+                    chunk[p + 3] = ((inject ushr 7).toInt() and 0xFF).toByte()
+                    chunk[p + 4] = (0x01 or ((inject shl 1).toInt() and 0xFE)).toByte()
+                    if (pid == AUDIO_PID_MAIN) lastAudioPtsMain = inject else lastAudioPtsSub = inject
+                    ptsInjectionCount++
+                    if (ptsInjectionCount <= 3 || ptsInjectionCount % 100 == 0) {
+                        Log.i(TAG, "PTS injected #$ptsInjectionCount PID=0x${String.format("%04X", pid)} pts=${inject / 90}ms")
+                    }
+                }
+            } else if (ptsDtsFlags == 0) {
+                Log.w(TAG, "PTS missing PID=0x${String.format("%04X", pid)} headerDataLen=$headerDataLen < 5, cannot inject")
+            }
+            i += TS_PACKET_SIZE
         }
     }
 
@@ -223,47 +294,6 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
         val payload = captionPesBuf.copyOf(captionPesLen)
         captionPesListener?.onCaptionPes(captionPesPts, payload)
         captionPesLen = 0
-    }
-
-    private fun logDiagnostics(chunk: ByteArray) {
-        if (!pid0x0111Seen) {
-            var i = 0
-            while (i + TS_PACKET_SIZE <= chunk.size) {
-                if (chunk[i] == 0x47.toByte()) {
-                    val pid = ((chunk[i + 1].toInt() and 0x1F) shl 8) or (chunk[i + 2].toInt() and 0xFF)
-                    if (pid == 0x0111) {
-                        pid0x0111Seen = true
-                        Log.i(TAG, "DIAG: first PID 0x0111 at outputOffset=$totalBytesOut")
-                        break
-                    }
-                }
-                i += TS_PACKET_SIZE
-            }
-        }
-        // PMT version tracking (tsreadex writes PMT to PID 0x01F0)
-        var i = 0
-        while (i + TS_PACKET_SIZE <= chunk.size) {
-            if (chunk[i] == 0x47.toByte()) {
-                val pid = ((chunk[i + 1].toInt() and 0x1F) shl 8) or (chunk[i + 2].toInt() and 0xFF)
-                if (pid == 0x01F0 && (chunk[i + 1].toInt() and 0x40) != 0) {
-                    val payloadStart = i + 4
-                    if (payloadStart + 7 <= chunk.size) {
-                        val pointerField = chunk[payloadStart].toInt() and 0xFF
-                        val sectionStart = payloadStart + 1 + pointerField
-                        if (sectionStart + 6 <= chunk.size) {
-                            val ver = (chunk[sectionStart + 5].toInt() shr 1) and 0x1F
-                            if (ver != lastPmtVersion) {
-                                Log.i(TAG, "DIAG: PMT version $lastPmtVersion → $ver at outputOffset=$totalBytesOut")
-                                lastPmtVersion = ver
-                            }
-                        }
-                    }
-                    break
-                }
-            }
-            i += TS_PACKET_SIZE
-        }
-        totalBytesOut += chunk.size
     }
 
     override fun close() {

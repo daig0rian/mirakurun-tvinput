@@ -25,6 +25,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "MirakurunSession"
 private const val TRACK_ID_MAIN     = "audio_main"
@@ -107,8 +108,11 @@ class MirakurunSession(
 
             val baseUrl = MirakurunPreferences.getUrl(context)
             val streamUrl = "$baseUrl/api/services/$serviceId/stream"
+            val httpClient = OkHttpClient.Builder()
+                .readTimeout(0, TimeUnit.MILLISECONDS)
+                .build()
             val dataSourceFactory = TsReadexDataSource.Factory(
-                OkHttpDataSource.Factory(OkHttpClient())
+                OkHttpDataSource.Factory(httpClient)
             )
 
             // 字幕 PES をメインスレッドでデコード→バッファ遅延分だけ表示を遅らせる。
