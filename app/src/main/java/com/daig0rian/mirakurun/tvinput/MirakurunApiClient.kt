@@ -1,5 +1,7 @@
 package com.daig0rian.mirakurun.tvinput
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.util.Log
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -18,6 +20,23 @@ class MirakurunApiClient(private val baseUrl: String) {
             if (!response.isSuccessful) throw Exception("HTTP ${response.code}")
             val body = response.body?.string() ?: throw Exception("レスポンスが空です")
             return parseServices(body)
+        }
+    }
+
+    fun fetchLogo(serviceId: Long): Bitmap? {
+        val request = Request.Builder()
+            .url("$baseUrl/api/services/$serviceId/logo")
+            .build()
+
+        return try {
+            httpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val bytes = response.body?.bytes() ?: return null
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "ロゴ取得失敗 (serviceId=$serviceId): $e")
+            null
         }
     }
 

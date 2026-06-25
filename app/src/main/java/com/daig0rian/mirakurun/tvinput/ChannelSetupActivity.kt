@@ -79,7 +79,7 @@ class ChannelSetupActivity : Activity() {
                 statusText.text = "${services.size} サービスを取得しました。チャンネル登録中..."
 
                 val count = withContext(Dispatchers.IO) {
-                    ChannelManager(this@ChannelSetupActivity).syncChannels(inputId, services)
+                    ChannelManager(this@ChannelSetupActivity).syncChannels(inputId, services, apiClient)
                 }
 
                 statusText.text = "${count} チャンネルを登録しました。番組表を取得中..."

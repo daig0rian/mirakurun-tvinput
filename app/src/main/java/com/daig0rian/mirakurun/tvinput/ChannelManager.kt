@@ -2,12 +2,18 @@ package com.daig0rian.mirakurun.tvinput
 
 import android.content.ContentValues
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.tv.TvContract
+import android.net.Uri
 import android.util.Log
 
 class ChannelManager(private val context: Context) {
 
-    fun syncChannels(inputId: String, services: List<MirakurunService>): Int {
+    fun syncChannels(
+        inputId: String,
+        services: List<MirakurunService>,
+        apiClient: MirakurunApiClient? = null,
+    ): Int {
         // serviceType == 1 (デジタルTV) のみ対象。ラジオ(2)・データ放送(0xA0等)は除外。
         val tvServices = services.filter { it.serviceType == 1 }
 
@@ -54,10 +60,25 @@ class ChannelManager(private val context: Context) {
                 } catch (_: SecurityException) {
                     // OEM によりシステムが制御。正規セットアップフロー経由で browsable になる
                 }
+                if (apiClient != null) {
+                    storeChannelLogo(channelUri, service.id, apiClient)
+                }
                 count++
             }
         }
         return count
+    }
+
+    private fun storeChannelLogo(channelUri: Uri, serviceId: Long, apiClient: MirakurunApiClient) {
+        val bitmap = apiClient.fetchLogo(serviceId) ?: return
+        val logoUri = TvContract.buildChannelLogoUri(channelUri)
+        try {
+            context.contentResolver.openOutputStream(logoUri)?.use { out ->
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "ロゴ保存失敗 (serviceId=$serviceId): $e")
+        }
     }
 
     private fun String.toTifChannelType(): String = when (this) {

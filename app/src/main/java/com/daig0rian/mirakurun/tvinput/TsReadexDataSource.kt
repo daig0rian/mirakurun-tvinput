@@ -59,7 +59,8 @@ internal class TsReadexDataSource(private val upstream: DataSource) : DataSource
     override fun open(dataSpec: DataSpec): Long {
         filterHandle = TsReadexFilter.create(
             programNumberOrIndex = -1,
-            audio1Mode = 1 + 8,
+            audio1Mode = 1 + 4 + 8,
+            audio2Mode = 1 + 4,
             captionMode = 1,
         )
         Log.d(TAG, "open: filter handle=$filterHandle uri=${dataSpec.uri}")

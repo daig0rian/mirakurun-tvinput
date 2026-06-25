@@ -11,24 +11,17 @@ static const int TS_PACKET_SIZE = 188;
 
 extern "C" {
 
-// Creates a CServiceFilter and returns its pointer as jlong handle.
-// programNumberOrIndex: -1 = first service in PAT (use for single-service streams from Mirakurun)
-// audio1Mode: 1+8 = ensure audio1 stream present + split dual-mono into two mono PIDs
-// captionMode: 1 = ensure caption stream present (for future ARIB subtitle use)
 JNIEXPORT jlong JNICALL
 Java_com_daig0rian_mirakurun_tvinput_TsReadexFilter_nativeCreate(
         JNIEnv *env, jclass clazz,
-        jint programNumberOrIndex, jint audio1Mode, jint captionMode)
+        jint programNumberOrIndex, jint audio1Mode, jint audio2Mode, jint captionMode)
 {
     auto *filter = new CServiceFilter();
     filter->SetProgramNumberOrIndex(programNumberOrIndex);
     filter->SetAudio1Mode(audio1Mode);
-    // audio2Mode=0: no special handling — 0x0111 is added to the PMT only when tsreadex detects
-    // dual-mono (m_isAudio1DualMono becomes true). Single-audio channels never declare 0x0111,
-    // so ExoPlayer reports one audio group and no track-switch UI appears.
-    filter->SetAudio2Mode(0);
+    filter->SetAudio2Mode(audio2Mode);
     filter->SetCaptionMode(captionMode);
-    LOGI("created filter: prog=%d audio1=%d caption=%d", programNumberOrIndex, audio1Mode, captionMode);
+    LOGI("created filter: prog=%d audio1=%d audio2=%d caption=%d", programNumberOrIndex, audio1Mode, audio2Mode, captionMode);
     return reinterpret_cast<jlong>(filter);
 }
 
