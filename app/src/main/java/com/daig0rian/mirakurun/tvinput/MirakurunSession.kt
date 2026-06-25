@@ -278,9 +278,9 @@ class MirakurunSession(
 
         if (audioGroups.size >= 2) {
             tracks.add(TvTrackInfo.Builder(TvTrackInfo.TYPE_AUDIO, TRACK_ID_MAIN)
-                .setAudioChannelCount(1).build())
+                .setAudioChannelCount(2).build())
             tracks.add(TvTrackInfo.Builder(TvTrackInfo.TYPE_AUDIO, TRACK_ID_SUB)
-                .setAudioChannelCount(1).build())
+                .setAudioChannelCount(2).build())
         }
 
         tracks.add(TvTrackInfo.Builder(TvTrackInfo.TYPE_SUBTITLE, TRACK_ID_SUBTITLE)
